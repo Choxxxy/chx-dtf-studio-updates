@@ -1,0 +1,37 @@
+name: Publish CHX DTF Studio update
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dist/CHX_DTF_Studio_Update_v44.0.4.zip'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release files
+        uses: actions/checkout@v4
+      - name: Verify archive and file digests
+        run: |
+          python3 - <<'PYVERIFY'
+          from pathlib import Path
+          import hashlib, json, zipfile
+          p = Path('dist/CHX_DTF_Studio_Update_v44.0.4.zip')
+          assert hashlib.sha256(p.read_bytes()).hexdigest() == '163bf65f5a4f089cf39c6076230e16ff7460b52819b3e05752b74cd10f37ad99'
+          with zipfile.ZipFile(p) as z:
+              assert set(z.namelist()) == {'manifest.json', 'CHX_DTF_Studio.html', 'CHX_Mail_Bridge.py'}
+              manifest = json.loads(z.read('manifest.json'))
+              assert manifest['schema'] == 1 and manifest['version'] == 'v44.0.4'
+              for name, expected in manifest['files'].items():
+                  assert hashlib.sha256(z.read(name)).hexdigest() == expected
+          PYVERIFY
+      - name: Publish official GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v44.0.4             dist/CHX_DTF_Studio_Update_v44.0.4.zip             --title 'CHX DTF Studio v44.0.4'             --notes 'Stable macOS update. Corrects GitHub update checks and live version reporting. Business data and password remain local.'             --latest
